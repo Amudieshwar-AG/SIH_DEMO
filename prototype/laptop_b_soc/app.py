@@ -133,9 +133,8 @@ with st.sidebar:
 
     st.markdown("---")
     auto_refresh = st.checkbox("🔄 Live Real-Time Auto-Refresh (1.5s)", value=True)
-    if auto_refresh:
-        time.sleep(1.5)
-        st.rerun()
+    st.write(f"• **Packets Received:** `{telemetry.get('packets_received', 0)}`")
+    st.write(f"• **Flow Ingestion Rate:** `{telemetry.get('packet_rate_pps', 1)} pkts/s`")
 
 # 1. Main Banner
 if not analysis["is_anomaly"]:
@@ -250,3 +249,9 @@ if alerts:
     st.dataframe(alert_df, use_container_width=True, hide_index=True)
 else:
     st.success("No security violations detected. Operating securely.")
+
+# Auto-refresh loop triggered after full page render
+if auto_refresh:
+    time.sleep(1.5)
+    st.rerun()
+
