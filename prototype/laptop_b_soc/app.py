@@ -20,7 +20,7 @@ from collector import SOCDataCollector
 from detector import ICSAnomalyDetector
 
 st.set_page_config(
-    page_title="SIH 2026 | ICS Cyber Defense & Threat AI",
+    page_title="Project S.H.I.E.L.D. | SCADA Cyber Defense & AI SOC",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -126,8 +126,8 @@ def send_safety_signal_to_plant(target_ip, payload):
 # Sidebar
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/shield.png", width=64)
-    st.title("🛡️ SOC Threat Intel Hub")
-    st.caption("SIH 2026 | Team System Hackers")
+    st.title("🛡️ S.H.I.E.L.D. SOC")
+    st.caption("**S**CADA **H**euristic **I**ntrusion **E**valuation & **L**ive **D**efense  \n*SIH 2026 | Team System Hackers*")
     st.markdown("---")
     
     st.subheader("🔑 Authentication Monitor")
@@ -160,16 +160,16 @@ with st.sidebar:
 if is_offline:
     st.markdown(f"""
     <div style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); border: 2px solid #64748b; border-radius: 12px; padding: 16px 24px; margin-bottom: 20px;">
-        <h2 style="margin:0; color:#f1f5f9; font-size:1.4rem;">⚫ SERVER OFFLINE : SOC SAFETY KILL-SWITCH ACTIVATED</h2>
+        <h2 style="margin:0; color:#f1f5f9; font-size:1.4rem;">⚫ S.H.I.E.L.D. SAFETY KILL-SWITCH ACTIVATED : SERVER OFFLINE</h2>
         <p style="margin:4px 0 0 0; color:#cbd5e1; font-size:0.9rem;">
-            Plant server safely powered down. Threat neutralized. All processes safely grounded at 0 RPM / 0 PSI.
+            Plant server safely powered down by SOC operator. Threat neutralized. All processes safely grounded at 0 RPM / 0 PSI.
         </p>
     </div>
     """, unsafe_allow_html=True)
 elif not analysis["is_anomaly"]:
     st.markdown(f"""
     <div class="soc-banner-safe">
-        <h2 style="margin:0; color:#10b981; font-size:1.4rem;">🟢 DEFCON 5 : INDUSTRIAL PROCESS & ACCESS SECURE</h2>
+        <h2 style="margin:0; color:#10b981; font-size:1.4rem;">🟢 S.H.I.E.L.D. DEFCON 5 : INDUSTRIAL PROCESS & ACCESS SECURE</h2>
         <p style="margin:4px 0 0 0; color:#d1fae5; font-size:0.9rem;">
             One-Way Telemetry Verified. Authorized User: <b>{analysis['active_user']}</b> | AI Anomaly Score: <b>{analysis['anomaly_score']}%</b>
         </p>
@@ -178,7 +178,7 @@ elif not analysis["is_anomaly"]:
 else:
     st.markdown(f"""
     <div class="soc-banner-danger">
-        <h2 style="margin:0; color:#ffffff; font-size:1.4rem;">🚨 THREAT ALERT: {analysis['threat_name']}</h2>
+        <h2 style="margin:0; color:#ffffff; font-size:1.4rem;">🚨 S.H.I.E.L.D. THREAT ALERT: {analysis['threat_name']}</h2>
         <p style="margin:4px 0 0 0; color:#fecaca; font-size:0.9rem;">
             <b>AI Anomaly Confidence: {analysis['anomaly_score']}%</b> | {analysis['mitre_id']}
         </p>
@@ -269,11 +269,11 @@ with chart_col:
         st.info("Awaiting telemetry stream from Laptop A...")
 
 with intel_col:
-    st.subheader("🧠 AI Threat Classifier & MITRE")
+    st.subheader("🧠 S.H.I.E.L.D. Threat AI & MITRE")
     box_class = "threat-intel-danger" if analysis["is_anomaly"] else "threat-intel-box"
     st.markdown(f"""
     <div class="{box_class}">
-        <div style="font-size:0.8rem; color:#94a3b8; font-weight:600;">AI THREAT SIGNATURE</div>
+        <div style="font-size:0.8rem; color:#94a3b8; font-weight:600;">S.H.I.E.L.D. THREAT SIGNATURE</div>
         <div style="font-size:1.1rem; font-weight:bold; color:#f8fafc; margin:4px 0;">{analysis['threat_name']}</div>
         <div style="font-size:0.85rem; color:#cbd5e1; margin-top:8px;">
             <b>• Severity:</b> <span style="color:{'#ef4444' if analysis['severity']=='CRITICAL' else '#10b981'};">{analysis['severity']}</span><br>
@@ -286,7 +286,7 @@ with intel_col:
 
 # 4. Audit Log Table
 st.markdown("---")
-st.subheader("📋 Security Incident & Authentication Audit Log")
+st.subheader("📋 S.H.I.E.L.D. Incident & Forensic Audit Log")
 if alerts:
     alert_df = pd.DataFrame(alerts)
     st.dataframe(alert_df, use_container_width=True, hide_index=True)
