@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title [LAPTOP A] - Industrial Plant SCADA/PLC Simulator
 color 0A
 echo ========================================================
