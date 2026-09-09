@@ -196,7 +196,7 @@ class IndustrialPlantSimulator:
                 sock.sendto(data, (self.target_soc_ip, PORT_TELEMETRY_UDP))
             except Exception:
                 pass
-            time.sleep(1.0)
+            time.sleep(0.35)
         sock.close()
 
     def print_status_screen(self):

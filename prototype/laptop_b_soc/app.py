@@ -164,8 +164,8 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# 2. Key Metrics Row
-col1, col2, col3, col4 = st.columns(4)
+# 2. Key Metrics Row (5 Cards)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     user_st = analysis["active_user"]
@@ -184,7 +184,7 @@ with col2:
     st.markdown(f"""
     <div class="soc-card">
         <div class="soc-card-header">Turbine Speed</div>
-        <div class="soc-metric-val" style="color:{r_color};">{rpm:.1f} <span style="font-size:1rem;color:#94a3b8;">RPM</span></div>
+        <div class="soc-metric-val" style="color:{r_color};">{rpm:.1f} <span style="font-size:0.9rem;color:#94a3b8;">RPM</span></div>
         <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Nominal: 3000 RPM</div>
     </div>
     """, unsafe_allow_html=True)
@@ -194,8 +194,8 @@ with col3:
     p_color = "#ef4444" if psi > 250 else "#38bdf8"
     st.markdown(f"""
     <div class="soc-card">
-        <div class="soc-card-header">Steam Boiler Pressure</div>
-        <div class="soc-metric-val" style="color:{p_color};">{psi:.1f} <span style="font-size:1rem;color:#94a3b8;">PSI</span></div>
+        <div class="soc-card-header">Boiler Pressure</div>
+        <div class="soc-metric-val" style="color:{p_color};">{psi:.1f} <span style="font-size:0.9rem;color:#94a3b8;">PSI</span></div>
         <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Nominal: 125 PSI</div>
     </div>
     """, unsafe_allow_html=True)
@@ -205,9 +205,20 @@ with col4:
     t_color = "#ef4444" if temp > 95.0 else "#38bdf8"
     st.markdown(f"""
     <div class="soc-card">
-        <div class="soc-card-header">Reactor Temperature</div>
-        <div class="soc-metric-val" style="color:{t_color};">{temp:.1f} <span style="font-size:1rem;color:#94a3b8;">°C</span></div>
+        <div class="soc-card-header">Reactor Temp</div>
+        <div class="soc-metric-val" style="color:{t_color};">{temp:.1f} <span style="font-size:0.9rem;color:#94a3b8;">°C</span></div>
         <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Nominal: 72.5 °C</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col5:
+    flow = telemetry.get("coolant_flow", 82.0)
+    f_color = "#ef4444" if flow < 30.0 else "#38bdf8"
+    st.markdown(f"""
+    <div class="soc-card">
+        <div class="soc-card-header">Coolant Flow</div>
+        <div class="soc-metric-val" style="color:{f_color};">{flow:.1f} <span style="font-size:0.9rem;color:#94a3b8;">L/m</span></div>
+        <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Nominal: 82.0 L/min</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -221,12 +232,15 @@ with chart_col:
         fig = go.Figure()
         fig.add_trace(go.Scatter(y=df["turbine_rpm"], mode='lines+markers', name='Turbine RPM', line=dict(color='#38bdf8', width=2.5), yaxis='y1'))
         fig.add_trace(go.Scatter(y=df["boiler_psi"], mode='lines', name='Boiler PSI', line=dict(color='#f59e0b', width=2, dash='dot'), yaxis='y2'))
+        if "coolant_flow" in df.columns:
+            fig.add_trace(go.Scatter(y=df["coolant_flow"], mode='lines', name='Coolant (L/min)', line=dict(color='#10b981', width=1.5), yaxis='y2'))
+            
         fig.update_layout(
             paper_bgcolor='#0b111e', plot_bgcolor='#111c33', font=dict(color='#94a3b8'),
             margin=dict(l=20, r=20, t=30, b=20), height=300,
             xaxis=dict(showgrid=True, gridcolor='#1e293b', title_text="Time Slices"),
             yaxis=dict(title_text="Turbine Speed (RPM)", title_font=dict(color="#38bdf8"), tickfont=dict(color="#38bdf8"), showgrid=True, gridcolor='#1e293b'),
-            yaxis2=dict(title_text="Boiler Pressure (PSI)", title_font=dict(color="#f59e0b"), tickfont=dict(color="#f59e0b"), overlaying='y', side='right'),
+            yaxis2=dict(title_text="Boiler PSI / Coolant Flow", title_font=dict(color="#f59e0b"), tickfont=dict(color="#f59e0b"), overlaying='y', side='right'),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -258,8 +272,8 @@ if alerts:
 else:
     st.success("No security violations detected. Operating securely.")
 
-# Auto-refresh loop triggered after full page render
+# High-frequency auto-refresh loop (0.5s for zero perceived latency)
 if auto_refresh:
-    time.sleep(1.5)
+    time.sleep(0.5)
     st.rerun()
 
