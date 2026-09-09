@@ -51,8 +51,9 @@ class SOCDataCollector:
             "tampered_by": "None"
         }
         
-        # Persistent Attack State (cannot be wiped by baseline telemetry)
+        # Persistent Attack & Safety State
         self.attack_lock = False
+        self.is_server_shutdown = False
         self.active_attack_cmd = ""
         self.active_user = "LOCAL_OPERATOR"
         self.active_auth_status = "AUTHENTICATED_LOCAL"
@@ -233,6 +234,81 @@ class SOCDataCollector:
     def get_alerts(self):
         with self._lock:
             return list(self.alert_history)
+
+    def trigger_emergency_shutdown(self, plant_ip="127.0.0.1"):
+        with self._lock:
+            self.attack_lock = False
+            self.is_server_shutdown = True
+            self.active_user = "NONE (POWERED_OFF)"
+            self.active_auth_status = "SERVER_OFFLINE_TRIPPED"
+            self.override_rpm = 0.0
+            self.override_psi = 0.0
+            self.override_temp = 25.0
+            self.override_flow = 0.0
+            self.override_status = "EMERGENCY_SHUTDOWN_OFFLINE"
+            
+            self.latest_telemetry["turbine_rpm"] = 0.0
+            self.latest_telemetry["boiler_psi"] = 0.0
+            self.latest_telemetry["reactor_temp"] = 25.0
+            self.latest_telemetry["coolant_flow"] = 0.0
+            self.latest_telemetry["active_user"] = "NONE (POWERED_OFF)"
+            self.latest_telemetry["auth_status"] = "SERVER_OFFLINE_TRIPPED"
+            self.latest_telemetry["plant_status"] = "EMERGENCY_SHUTDOWN_OFFLINE"
+            self.latest_telemetry["last_incident"] = "🚨 EMERGENCY KILL-SWITCH ENGAGED BY SOC OPERATOR -> PLANT POWERED OFF"
+            self.telemetry_history.append(dict(self.latest_telemetry))
+            
+            self.add_alert(
+                event_type="EMERGENCY_KILLSWITCH_TRIGGERED",
+                severity="CRITICAL",
+                source_ip="LOCAL_SOC (Laptop B)",
+                details=f"Operator manually killed power on Plant ({plant_ip}) to halt active cyber attack."
+            )
+            
+            # Send shutdown command to Laptop A on port 5002
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(json.dumps({"type": "EMERGENCY_SHUTDOWN", "command": "EMERGENCY_SHUTDOWN"}).encode("utf-8"), (plant_ip, 5002))
+                s.close()
+            except Exception:
+                pass
+
+    def restore_server_online(self, plant_ip="127.0.0.1"):
+        with self._lock:
+            self.is_server_shutdown = False
+            self.attack_lock = False
+            self.active_user = "LOCAL_OPERATOR"
+            self.active_auth_status = "AUTHENTICATED_LOCAL"
+            self.failed_login_count = 0
+            self.override_rpm = None
+            self.override_psi = None
+            self.override_temp = None
+            self.override_flow = None
+            self.override_status = None
+            
+            self.latest_telemetry["turbine_rpm"] = 3000.0
+            self.latest_telemetry["boiler_psi"] = 125.0
+            self.latest_telemetry["reactor_temp"] = 72.5
+            self.latest_telemetry["coolant_flow"] = 82.0
+            self.latest_telemetry["active_user"] = "LOCAL_OPERATOR"
+            self.latest_telemetry["auth_status"] = "AUTHENTICATED_LOCAL"
+            self.latest_telemetry["plant_status"] = "NORMAL_OPERATING"
+            self.latest_telemetry["last_incident"] = "Plant server safely restored online to nominal baseline"
+            self.telemetry_history.append(dict(self.latest_telemetry))
+            
+            self.add_alert(
+                event_type="PLANT_SERVER_RESTORED_ONLINE",
+                severity="INFO",
+                source_ip="LOCAL_SOC (Laptop B)",
+                details="Plant server safely brought back online to normal baseline."
+            )
+            
+            # Send power-on command to Laptop A on port 5002
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(json.dumps({"type": "RESET_NORMAL", "command": "RESET_NORMAL"}).encode("utf-8"), (plant_ip, 5002))
+                s.close()
+            except Exception:
+                pass
 
     def trigger_isolation(self):
         with self._lock:

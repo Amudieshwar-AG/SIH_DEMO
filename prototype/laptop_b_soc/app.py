@@ -139,28 +139,16 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("⚡ Plant Server Power Control")
     plant_ip = telemetry.get("sender_ip", "127.0.0.1")
-    is_offline = (analysis["auth_status"] == "SERVER_OFFLINE_TRIPPED" or telemetry.get("plant_status") == "EMERGENCY_SHUTDOWN_OFFLINE")
+    is_offline = (analysis["auth_status"] == "SERVER_OFFLINE_TRIPPED" or telemetry.get("plant_status") == "EMERGENCY_SHUTDOWN_OFFLINE" or getattr(collector, "is_server_shutdown", False))
     
     if not is_offline:
         if st.button("🚨 EMERGENCY SERVER SHUTDOWN (OFF)", use_container_width=True, type="primary"):
-            send_safety_signal_to_plant(plant_ip, {"type": "EMERGENCY_SHUTDOWN", "origin": "LAPTOP_B_SOC"})
-            collector.add_alert(
-                event_type="EMERGENCY_KILLSWITCH_TRIGGERED",
-                severity="CRITICAL",
-                source_ip="LOCAL_SOC (Laptop B)",
-                details=f"Operator manually killed power on Plant ({plant_ip}) to halt active cyber attack."
-            )
+            collector.trigger_emergency_shutdown(plant_ip)
             st.rerun()
     else:
         st.error("⚫ PLANT SERVER POWERED OFF")
         if st.button("🟢 RESTORE / START SERVER (ON)", use_container_width=True):
-            send_safety_signal_to_plant(plant_ip, {"type": "SERVER_POWER_ON", "origin": "LAPTOP_B_SOC"})
-            collector.add_alert(
-                event_type="PLANT_SERVER_RESTORED_ONLINE",
-                severity="INFO",
-                source_ip="LOCAL_SOC (Laptop B)",
-                details="Plant server safely restored online to nominal baseline."
-            )
+            collector.restore_server_online(plant_ip)
             st.rerun()
 
     st.markdown("---")
