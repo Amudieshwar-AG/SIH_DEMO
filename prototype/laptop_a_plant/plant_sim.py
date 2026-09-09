@@ -131,13 +131,25 @@ class IndustrialPlantSimulator:
                                 self.state["auth_status"] = "UNAUTHORIZED_COMMAND_REJECTED"
                                 self.state["last_incident"] = f"REJECTED Command: Invalid credentials from {sender}"
                                 
-                        elif req_type == "RESET_NORMAL":
+                        elif req_type == "EMERGENCY_SHUTDOWN":
+                            self.target_override["active"] = True
+                            self.target_override["turbine_rpm"] = 0.0
+                            self.target_override["boiler_psi"] = 0.0
+                            self.target_override["reactor_temp"] = 25.0
+                            self.target_override["coolant_flow"] = 0.0
+                            self.state["status"] = "EMERGENCY_SHUTDOWN_OFFLINE"
+                            self.state["auth_status"] = "SERVER_OFFLINE_TRIPPED"
+                            self.state["active_user"] = "NONE (POWERED_OFF)"
+                            self.state["tampered_by"] = f"SOC_SAFETY_TRIP ({sender})"
+                            self.state["last_incident"] = f"🚨 EMERGENCY KILL-SWITCH ACTIVATED BY SOC ({sender}) -> SERVER POWERED OFF!"
+                            
+                        elif req_type == "RESET_NORMAL" or req_type == "SERVER_POWER_ON":
                             self.target_override["active"] = False
                             self.state["status"] = "NORMAL_OPERATING"
                             self.state["auth_status"] = "AUTHENTICATED_LOCAL"
                             self.state["active_user"] = "LOCAL_OPERATOR"
                             self.state["failed_login_count"] = 0
-                            self.state["last_incident"] = "Plant safely restored to baseline"
+                            self.state["last_incident"] = "Plant safely brought back online to baseline"
                             self.state["tampered_by"] = "None"
                             
                 except Exception:

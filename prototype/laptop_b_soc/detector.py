@@ -66,7 +66,16 @@ class ICSAnomalyDetector:
         is_anomaly = False
 
         # Threat Rules & AI Correlation
-        if failed_logins >= 3 or auth_status == "FAILED_AUTH_ATTEMPT":
+        plant_status = telemetry.get("plant_status", "NORMAL_OPERATING")
+        if auth_status == "SERVER_OFFLINE_TRIPPED" or plant_status == "EMERGENCY_SHUTDOWN_OFFLINE":
+            is_anomaly = False
+            severity = "INFO"
+            threat_name = "SERVER_OFFLINE_SAFETY_KILLSWITCH"
+            mitre_id = "AUTOMATED DEFENSIVE COUNTERMEASURE ACTIVE"
+            root_cause = "Plant physically powered down by SOC operator. All turbine & pressure processes safely halted."
+            ml_score = 0.0
+
+        elif failed_logins >= 3 or auth_status == "FAILED_AUTH_ATTEMPT":
             is_anomaly = True
             severity = "HIGH"
             threat_name = "CREDENTIAL_STUFFING_BRUTEFORCE_ATTACK"

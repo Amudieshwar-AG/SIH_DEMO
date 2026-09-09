@@ -114,6 +114,15 @@ if analysis["is_anomaly"] and analysis["severity"] in ["HIGH", "CRITICAL"]:
             details=analysis["root_cause"]
         )
 
+def send_safety_signal_to_plant(target_ip, payload):
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(json.dumps(payload).encode("utf-8"), (target_ip, 5002))
+        sock.close()
+    except Exception:
+        pass
+
 # Sidebar
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/shield.png", width=64)
@@ -128,24 +137,48 @@ with st.sidebar:
     st.write(f"• **Attacker IP:** `{analysis['tampered_by']}`")
     
     st.markdown("---")
-    st.subheader("⚡ Automated Defense Actions")
-    if not collector.isolation_mode:
-        if st.button("🚨 TRIGGER DATA-DIODE ISOLATION", use_container_width=True, type="primary"):
-            collector.trigger_isolation()
+    st.subheader("⚡ Plant Server Power Control")
+    plant_ip = telemetry.get("sender_ip", "127.0.0.1")
+    is_offline = (analysis["auth_status"] == "SERVER_OFFLINE_TRIPPED" or telemetry.get("plant_status") == "EMERGENCY_SHUTDOWN_OFFLINE")
+    
+    if not is_offline:
+        if st.button("🚨 EMERGENCY SERVER SHUTDOWN (OFF)", use_container_width=True, type="primary"):
+            send_safety_signal_to_plant(plant_ip, {"type": "EMERGENCY_SHUTDOWN", "origin": "LAPTOP_B_SOC"})
+            collector.add_alert(
+                event_type="EMERGENCY_KILLSWITCH_TRIGGERED",
+                severity="CRITICAL",
+                source_ip="LOCAL_SOC (Laptop B)",
+                details=f"Operator manually killed power on Plant ({plant_ip}) to halt active cyber attack."
+            )
             st.rerun()
     else:
-        st.error("🛡️ AIR-GAP ISOLATION ENGAGED")
-        if st.button("🔄 RESTORE NORMAL LINK", use_container_width=True):
-            collector.reset_isolation()
+        st.error("⚫ PLANT SERVER POWERED OFF")
+        if st.button("🟢 RESTORE / START SERVER (ON)", use_container_width=True):
+            send_safety_signal_to_plant(plant_ip, {"type": "SERVER_POWER_ON", "origin": "LAPTOP_B_SOC"})
+            collector.add_alert(
+                event_type="PLANT_SERVER_RESTORED_ONLINE",
+                severity="INFO",
+                source_ip="LOCAL_SOC (Laptop B)",
+                details="Plant server safely restored online to nominal baseline."
+            )
             st.rerun()
 
     st.markdown("---")
-    auto_refresh = st.checkbox("🔄 Live Real-Time Auto-Refresh (1.5s)", value=True)
-    st.write(f"• **Packets Received:** `{telemetry.get('packets_received', 0)}`")
-    st.write(f"• **Flow Ingestion Rate:** `{telemetry.get('packet_rate_pps', 1)} pkts/s`")
+    auto_refresh = st.checkbox("🔄 Live Real-Time Auto-Refresh", value=True)
+    st.write(f"• **Packets Ingested:** `{telemetry.get('packets_received', 0)}`")
+    st.write(f"• **Flow Rate:** `{telemetry.get('packet_rate_pps', 1)} pkts/s`")
 
 # 1. Main Banner
-if not analysis["is_anomaly"]:
+if is_offline:
+    st.markdown(f"""
+    <div style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); border: 2px solid #64748b; border-radius: 12px; padding: 16px 24px; margin-bottom: 20px;">
+        <h2 style="margin:0; color:#f1f5f9; font-size:1.4rem;">⚫ SERVER OFFLINE : SOC SAFETY KILL-SWITCH ACTIVATED</h2>
+        <p style="margin:4px 0 0 0; color:#cbd5e1; font-size:0.9rem;">
+            Plant server safely powered down. Threat neutralized. All processes safely grounded at 0 RPM / 0 PSI.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+elif not analysis["is_anomaly"]:
     st.markdown(f"""
     <div class="soc-banner-safe">
         <h2 style="margin:0; color:#10b981; font-size:1.4rem;">🟢 DEFCON 5 : INDUSTRIAL PROCESS & ACCESS SECURE</h2>
