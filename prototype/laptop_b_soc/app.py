@@ -224,9 +224,9 @@ with chart_col:
         fig.update_layout(
             paper_bgcolor='#0b111e', plot_bgcolor='#111c33', font=dict(color='#94a3b8'),
             margin=dict(l=20, r=20, t=30, b=20), height=300,
-            xaxis=dict(showgrid=True, gridcolor='#1e293b', title="Time Slices"),
-            yaxis=dict(title="Turbine Speed (RPM)", titlefont=dict(color="#38bdf8"), tickfont=dict(color="#38bdf8"), showgrid=True, gridcolor='#1e293b'),
-            yaxis2=dict(title="Boiler Pressure (PSI)", titlefont=dict(color="#f59e0b"), tickfont=dict(color="#f59e0b"), overlaying='y', side='right'),
+            xaxis=dict(showgrid=True, gridcolor='#1e293b', title_text="Time Slices"),
+            yaxis=dict(title_text="Turbine Speed (RPM)", title_font=dict(color="#38bdf8"), tickfont=dict(color="#38bdf8"), showgrid=True, gridcolor='#1e293b'),
+            yaxis2=dict(title_text="Boiler Pressure (PSI)", title_font=dict(color="#f59e0b"), tickfont=dict(color="#f59e0b"), overlaying='y', side='right'),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         st.plotly_chart(fig, use_container_width=True)
