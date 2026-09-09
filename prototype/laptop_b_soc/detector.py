@@ -1,5 +1,5 @@
 """
-LAPTOP B : ML ANOMALY DETECTION & THREAT CLASSIFICATION ENGINE
+LAPTOP B : AI/ML ANOMALY DETECTOR & CREDENTIAL THREAT CLASSIFIER
 SIH 2026 - System Hackers Prototype
 """
 
@@ -14,16 +14,15 @@ class ICSAnomalyDetector:
             "boiler_psi": (115, 140),
             "reactor_temp": (68.0, 78.0),
             "coolant_flow": (75.0, 90.0),
-            "grid_hz": (49.8, 50.2),
-            "packet_rate_pps": (0, 5)
+            "grid_hz": (49.8, 50.2)
         }
         
-        # Pre-train an Isolation Forest on synthetic normal ICS operational baseline
+        # Pre-train Isolation Forest on normal physical baseline
         self.model = IsolationForest(contamination=0.05, random_state=42)
         self._fit_baseline_model()
 
     def _fit_baseline_model(self):
-        """Generates synthetic normal baseline operating distribution to fit ML model."""
+        """Fits ML baseline model on normal operating distributions."""
         np.random.seed(42)
         n_samples = 300
         
@@ -32,88 +31,90 @@ class ICSAnomalyDetector:
         temp = np.random.normal(72.5, 1.2, n_samples)
         flow = np.random.normal(82, 2.5, n_samples)
         hz = np.random.normal(50.0, 0.05, n_samples)
-        pps = np.random.poisson(1.5, n_samples)
         
-        X_train = np.column_stack([rpm, psi, temp, flow, hz, pps])
+        X_train = np.column_stack([rpm, psi, temp, flow, hz])
         self.model.fit(X_train)
 
     def analyze(self, telemetry):
         """
-        Analyzes a single telemetry record using ML Isolation Forest + Threat Signature Engine.
-        Returns:
-            - is_anomaly (bool)
-            - anomaly_score (float 0.0 - 100.0%)
-            - threat_name (str)
-            - severity (str: NORMAL, MEDIUM, CRITICAL)
-            - mitre_id (str)
-            - root_cause (str)
+        Dual AI Engine:
+        1. ML Isolation Forest: Physical process anomaly scoring.
+        2. Threat & Credential Classifier: Analyzes authentication security & MITRE techniques.
         """
         rpm = telemetry.get("turbine_rpm", 3000.0)
         psi = telemetry.get("boiler_psi", 125.0)
         temp = telemetry.get("reactor_temp", 72.5)
         flow = telemetry.get("coolant_flow", 82.0)
         hz = telemetry.get("grid_hz", 50.0)
-        pps = telemetry.get("packet_rate_pps", 1.0)
+        
+        # Security telemetry fields
+        active_user = telemetry.get("active_user", "LOCAL_OPERATOR")
+        auth_status = telemetry.get("auth_status", "AUTHENTICATED_LOCAL")
+        failed_logins = telemetry.get("failed_login_count", 0)
         tampered_by = telemetry.get("tampered_by", "None")
         
-        # 1. ML Isolation Forest Anomaly Score
-        sample = np.array([[rpm, psi, temp, flow, hz, pps]])
-        raw_score = self.model.decision_function(sample)[0]  # Lower = more abnormal
-        # Map raw score (-0.5 to +0.2) to percentage (0% = Normal, 100% = Extreme Anomaly)
-        ml_anomaly_pct = max(0.0, min(100.0, round((0.2 - raw_score) * 150, 1)))
-        
-        # 2. Heuristic & MITRE ATT&CK Threat Classifier
-        threat_name = "NORMAL_PROCESS_EQUILIBRIUM"
+        # 1. Compute ML Isolation Forest Anomaly Score
+        sample = np.array([[rpm, psi, temp, flow, hz]])
+        raw_score = self.model.decision_function(sample)[0]
+        ml_score = max(0.0, min(100.0, round((0.2 - raw_score) * 150, 1)))
+
+        # 2. Threat & Credential Security Classification
+        threat_name = "SECURE_BASELINE_OPERATIONS"
         severity = "NORMAL"
         mitre_id = "N/A"
-        root_cause = "All industrial parameters within nominal safe thresholds."
+        root_cause = "All industrial parameters & user sessions within nominal authorized baseline."
         is_anomaly = False
 
-        if rpm > 4500:
-            is_anomaly = True
-            severity = "CRITICAL"
-            threat_name = "STUXNET_TURBINE_OVERSPEED_ATTACK"
-            mitre_id = "MITRE T0836 (Modify Parameter) & T0846 (Impair Process Control)"
-            root_cause = f"Turbine RPM ({rpm:.1f}) exceeded centrifugal mechanical safety threshold (4500 RPM)."
-            ml_anomaly_pct = max(ml_anomaly_pct, 98.6)
-            
-        elif psi > 250:
-            is_anomaly = True
-            severity = "CRITICAL"
-            threat_name = "BOILER_CATASTROPHIC_OVERPRESSURE"
-            mitre_id = "MITRE T0855 (Unauthorized Command) & T0828 (Loss of Safety)"
-            root_cause = f"Boiler Steam Pressure ({psi:.1f} PSI) exceeded burst disc safety threshold (250 PSI)."
-            ml_anomaly_pct = max(ml_anomaly_pct, 97.8)
-            
-        elif flow < 30.0 or temp > 95.0:
+        # Threat Rules & AI Correlation
+        if failed_logins >= 3 or auth_status == "FAILED_AUTH_ATTEMPT":
             is_anomaly = True
             severity = "HIGH"
-            threat_name = "COOLANT_STARVATION_THERMAL_RUNAWAY"
-            mitre_id = "MITRE T0806 (Brute Force I/O Manipulation)"
-            root_cause = f"Coolant flow choked to {flow:.1f} L/min resulting in core thermal spike to {temp:.1f} °C."
-            ml_anomaly_pct = max(ml_anomaly_pct, 94.2)
-            
-        elif pps > 30:
+            threat_name = "CREDENTIAL_STUFFING_BRUTEFORCE_ATTACK"
+            mitre_id = "MITRE T0812 (Default/Stolen Credentials) & T0806 (Brute Force Access)"
+            root_cause = f"High-frequency failed authentication attempts ({failed_logins} failures) detected on PLC gateway."
+            ml_score = max(ml_score, 88.5)
+
+        elif auth_status in ["COMPROMISED_CREDENTIAL_LOGIN", "PRIVILEGED_COMMAND_EXECUTED"]:
+            is_anomaly = True
+            severity = "CRITICAL"
+            if rpm > 4500:
+                threat_name = "STOLEN_CREDENTIAL_TURBINE_OVERSPEED"
+                mitre_id = "MITRE T0859 (Valid Accounts Abuse) & T0836 (Modify Parameter)"
+                root_cause = f"Attacker ({tampered_by}) hijacked '{active_user}' credentials to force Turbine speed to {rpm:.1f} RPM."
+                ml_score = 99.2
+            elif psi > 250:
+                threat_name = "STOLEN_CREDENTIAL_BOILER_OVERPRESSURE"
+                mitre_id = "MITRE T0859 (Valid Accounts Abuse) & T0846 (Impair Process Control)"
+                root_cause = f"Attacker ({tampered_by}) used stolen PLC credentials to spike Boiler pressure to {psi:.1f} PSI."
+                ml_score = 98.7
+            elif flow < 30.0:
+                threat_name = "STOLEN_CREDENTIAL_COOLANT_STARVATION"
+                mitre_id = "MITRE T0859 (Valid Accounts) & T0828 (Loss of Safety)"
+                root_cause = f"Attacker ({tampered_by}) authenticated as '{active_user}' and choked reactor coolant pump."
+                ml_score = 97.5
+            else:
+                threat_name = "UNAUTHORIZED_PRIVILEGED_LOGIN_DETECTED"
+                mitre_id = "MITRE T0859 (Valid Accounts - Stolen Credential)"
+                root_cause = f"Unauthorized remote session authenticated as '{active_user}' from IP {tampered_by}."
+                ml_score = 85.0
+
+        elif rpm > 4500 or psi > 250 or flow < 30.0 or ml_score > 70.0:
             is_anomaly = True
             severity = "HIGH"
-            threat_name = "VOLUMETRIC_TELEMETRY_FLOOD_DDOS"
-            mitre_id = "MITRE T0814 (Denial of Service - Sensor Jamming)"
-            root_cause = f"Abnormal inbound traffic surge ({pps} pkts/sec) attempting to saturate SOC collector."
-            ml_anomaly_pct = max(ml_anomaly_pct, 92.5)
-            
-        elif ml_anomaly_pct > 65.0:
-            is_anomaly = True
-            severity = "MEDIUM"
-            threat_name = "STATISTICAL_PROCESS_DRIFT_ANOMALY"
-            mitre_id = "MITRE T0849 (Sensing Parameter Spoofing)"
-            root_cause = "Unusual correlation between grid frequency and pressure detected by ML Isolation Forest."
+            threat_name = "PHYSICAL_PROCESS_DEVIATION"
+            mitre_id = "MITRE T0836 (Modify Parameter)"
+            root_cause = "Sensor telemetry deviated significantly from trained ML baseline equilibrium."
+            ml_score = max(ml_score, 92.0)
 
         return {
             "is_anomaly": is_anomaly,
-            "anomaly_score": ml_anomaly_pct,
+            "anomaly_score": ml_score,
             "threat_name": threat_name,
             "severity": severity,
             "mitre_id": mitre_id,
             "root_cause": root_cause,
+            "active_user": active_user,
+            "auth_status": auth_status,
+            "failed_logins": failed_logins,
             "tampered_by": tampered_by
         }
