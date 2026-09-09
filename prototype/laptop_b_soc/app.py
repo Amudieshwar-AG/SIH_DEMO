@@ -26,8 +26,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-collector = SOCDataCollector()
-detector = ICSAnomalyDetector()
+@st.cache_resource
+def get_soc_collector():
+    return SOCDataCollector()
+
+@st.cache_resource
+def get_ics_detector():
+    return ICSAnomalyDetector()
+
+collector = get_soc_collector()
+detector = get_ics_detector()
 
 st.markdown("""
 <style>
