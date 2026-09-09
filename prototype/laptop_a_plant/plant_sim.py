@@ -130,16 +130,33 @@ class IndustrialPlantSimulator:
                                 self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: Choked Coolant Pump"
                                 
                         elif req_type == "EMERGENCY_SHUTDOWN" or cmd == "EMERGENCY_SHUTDOWN":
-                            self.target_override["active"] = True
-                            self.target_override["turbine_rpm"] = 0.0
-                            self.target_override["boiler_psi"] = 0.0
-                            self.target_override["reactor_temp"] = 25.0
-                            self.target_override["coolant_flow"] = 0.0
-                            self.state["status"] = "EMERGENCY_SHUTDOWN_OFFLINE"
-                            self.state["auth_status"] = "SERVER_OFFLINE_TRIPPED"
-                            self.state["active_user"] = "NONE (POWERED_OFF)"
-                            self.state["tampered_by"] = f"SOC_KILLSWITCH ({sender})"
-                            self.state["last_incident"] = f"🚨 EMERGENCY KILL-SWITCH ACTIVATED BY SOC ({sender}) -> SERVER POWERED OFF!"
+                            self.running = False
+                            print("\n" + "=" * 80)
+                            print(f" [!] 🚨 EMERGENCY KILL-SWITCH RECEIVED FROM SOC ({sender})!")
+                            print(" [!] POWER CUT CONFIRMED. PLANT SERVER IS NOW POWERED OFF / TERMINATED.")
+                            print("=" * 80 + "\n")
+                            # Send final confirmation packet to Laptop B
+                            try:
+                                s_conf = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                s_conf.sendto(json.dumps({
+                                    "source": "LAPTOP_A_SCADA_PLC",
+                                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "plant_status": "EMERGENCY_SHUTDOWN_OFFLINE",
+                                    "auth_status": "SERVER_OFFLINE_TRIPPED",
+                                    "active_user": "NONE (POWERED_OFF)",
+                                    "turbine_rpm": 0.0,
+                                    "boiler_psi": 0.0,
+                                    "reactor_temp": 25.0,
+                                    "coolant_flow": 0.0,
+                                    "tampered_by": f"SOC_KILLSWITCH ({sender})",
+                                    "last_incident": "🚨 SERVER POWERED OFF BY SOC KILL-SWITCH"
+                                }).encode("utf-8"), (self.target_soc_ip, PORT_TELEMETRY_UDP))
+                                s_conf.close()
+                            except Exception:
+                                pass
+                            import _thread
+                            _thread.interrupt_main()
+                            break
                             
                         elif req_type in ["RESET_NORMAL", "SERVER_POWER_ON"] or cmd in ["RESET_NORMAL", "SERVER_POWER_ON"]:
                             self.target_override["active"] = False
