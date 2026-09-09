@@ -51,8 +51,18 @@ class SOCDataCollector:
             "tampered_by": "None"
         }
         
-        # Active mitigation flag
-        self.isolation_mode = False
+        # Persistent Attack State (cannot be wiped by baseline telemetry)
+        self.attack_lock = False
+        self.active_attack_cmd = ""
+        self.active_user = "LOCAL_OPERATOR"
+        self.active_auth_status = "AUTHENTICATED_LOCAL"
+        self.failed_login_count = 0
+        self.tampered_by = "None"
+        self.override_rpm = None
+        self.override_psi = None
+        self.override_temp = None
+        self.override_flow = None
+        self.override_status = None
         
         # Start background collection listeners
         self.start_listeners()
@@ -80,61 +90,82 @@ class SOCDataCollector:
                 try:
                     payload = json.loads(data.decode("utf-8"))
                     sender_ip = addr[0]
-                    
                     req_type = payload.get("type", "")
                     cmd = payload.get("command", "")
                     
                     with self._lock:
-                        # If incoming packet is from Plant Telemetry
+                        # 1. Handle Attack Injections from Laptop C
+                        if req_type == "LOGIN_ATTEMPT":
+                            self.failed_login_count += 1
+                            self.active_auth_status = "FAILED_AUTH_ATTEMPT"
+                            self.tampered_by = sender_ip
+                            self.add_alert(
+                                event_type="CREDENTIAL_STUFFING_BRUTEFORCE_ATTACK",
+                                severity="HIGH",
+                                source_ip=sender_ip,
+                                details=f"Failed login attempt #{self.failed_login_count} detected from {sender_ip}"
+                            )
+                            
+                        elif req_type == "MALICIOUS_OVERRIDE" or cmd in ["OVERRIDE_TURBINE_RPM", "OVERPRESSURE_BOILER", "CHOKE_COOLANT"]:
+                            self.attack_lock = True
+                            user = payload.get("username", "admin_plc")
+                            self.active_user = user
+                            self.active_auth_status = "COMPROMISED_CREDENTIAL_LOGIN"
+                            self.tampered_by = sender_ip
+                            
+                            if cmd == "OVERRIDE_TURBINE_RPM":
+                                self.override_rpm = float(payload.get("target_rpm", 5850.0))
+                                self.override_status = "CRITICAL_TURBINE_OVERSPEED"
+                            elif cmd == "OVERPRESSURE_BOILER":
+                                self.override_psi = float(payload.get("target_psi", 420.0))
+                                self.override_status = "CRITICAL_BOILER_OVERPRESSURE"
+                            elif cmd == "CHOKE_COOLANT":
+                                self.override_flow = 4.0
+                                self.override_temp = 125.0
+                                self.override_status = "THERMAL_RUNAWAY_ALERT"
+                                
+                        elif req_type in ["RESET_NORMAL", "SERVER_POWER_ON"] or cmd in ["RESET_NORMAL", "SERVER_POWER_ON"]:
+                            self.attack_lock = False
+                            self.active_user = "LOCAL_OPERATOR"
+                            self.active_auth_status = "AUTHENTICATED_LOCAL"
+                            self.failed_login_count = 0
+                            self.tampered_by = "None"
+                            self.override_rpm = None
+                            self.override_psi = None
+                            self.override_temp = None
+                            self.override_flow = None
+                            self.override_status = None
+
+                        # 2. Ingest plant physical readings
                         if "turbine_rpm" in payload and req_type not in ["MALICIOUS_OVERRIDE", "LOGIN_ATTEMPT"]:
                             payload["sender_ip"] = sender_ip
                             payload["recv_time"] = datetime.now().strftime("%H:%M:%S")
                             self.latest_telemetry.update(payload)
                             self.latest_telemetry["packets_received"] = self.latest_telemetry.get("packets_received", 0) + 1
-                            self.telemetry_history.append(dict(self.latest_telemetry))
                             
-                        # If incoming packet is an Attack Injection from Laptop C
-                        elif req_type == "LOGIN_ATTEMPT":
-                            self.latest_telemetry["failed_login_count"] = self.latest_telemetry.get("failed_login_count", 0) + 1
-                            self.latest_telemetry["auth_status"] = "FAILED_AUTH_ATTEMPT"
-                            self.latest_telemetry["tampered_by"] = sender_ip
-                            self.latest_telemetry["last_incident"] = f"FAILED LOGIN ATTEMPT #{self.latest_telemetry['failed_login_count']} from {sender_ip}"
-                            
-                        elif req_type == "MALICIOUS_OVERRIDE" or cmd in ["OVERRIDE_TURBINE_RPM", "OVERPRESSURE_BOILER", "CHOKE_COOLANT"]:
-                            user = payload.get("username", "admin_plc")
-                            self.latest_telemetry["active_user"] = user
-                            self.latest_telemetry["auth_status"] = "COMPROMISED_CREDENTIAL_LOGIN"
-                            self.latest_telemetry["tampered_by"] = sender_ip
-                            
-                            if cmd == "OVERRIDE_TURBINE_RPM":
-                                rpm = float(payload.get("target_rpm", 5850.0))
-                                self.latest_telemetry["turbine_rpm"] = rpm
-                                self.latest_telemetry["plant_status"] = "CRITICAL_TURBINE_OVERSPEED"
-                                self.latest_telemetry["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {user} forced Turbine to {rpm} RPM"
-                            elif cmd == "OVERPRESSURE_BOILER":
-                                psi = float(payload.get("target_psi", 420.0))
-                                self.latest_telemetry["boiler_psi"] = psi
-                                self.latest_telemetry["plant_status"] = "CRITICAL_BOILER_OVERPRESSURE"
-                                self.latest_telemetry["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {user} spiked Boiler to {psi} PSI"
-                            elif cmd == "CHOKE_COOLANT":
-                                self.latest_telemetry["coolant_flow"] = 4.0
-                                self.latest_telemetry["reactor_temp"] = 125.0
-                                self.latest_telemetry["plant_status"] = "THERMAL_RUNAWAY_ALERT"
-                                self.latest_telemetry["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {user} choked Coolant Pump"
+                        # 3. Apply persistent attack overlays if attack active
+                        if self.failed_login_count > 0:
+                            self.latest_telemetry["failed_login_count"] = self.failed_login_count
+                            if not self.attack_lock:
+                                self.latest_telemetry["auth_status"] = self.active_auth_status
+                                self.latest_telemetry["tampered_by"] = self.tampered_by
                                 
-                            self.telemetry_history.append(dict(self.latest_telemetry))
-                            
-                        elif req_type == "RESET_NORMAL" or cmd == "RESET_NORMAL":
-                            self.latest_telemetry["turbine_rpm"] = 3000.0
-                            self.latest_telemetry["boiler_psi"] = 125.0
-                            self.latest_telemetry["reactor_temp"] = 72.5
-                            self.latest_telemetry["coolant_flow"] = 82.0
-                            self.latest_telemetry["active_user"] = "LOCAL_OPERATOR"
-                            self.latest_telemetry["auth_status"] = "AUTHENTICATED_LOCAL"
-                            self.latest_telemetry["failed_login_count"] = 0
-                            self.latest_telemetry["plant_status"] = "NORMAL_OPERATING"
-                            self.latest_telemetry["tampered_by"] = "None"
-                            
+                        if self.attack_lock:
+                            self.latest_telemetry["active_user"] = self.active_user
+                            self.latest_telemetry["auth_status"] = self.active_auth_status
+                            self.latest_telemetry["tampered_by"] = self.tampered_by
+                            if self.override_rpm is not None:
+                                self.latest_telemetry["turbine_rpm"] = self.override_rpm
+                            if self.override_psi is not None:
+                                self.latest_telemetry["boiler_psi"] = self.override_psi
+                            if self.override_temp is not None:
+                                self.latest_telemetry["reactor_temp"] = self.override_temp
+                            if self.override_flow is not None:
+                                self.latest_telemetry["coolant_flow"] = self.override_flow
+                            if self.override_status is not None:
+                                self.latest_telemetry["plant_status"] = self.override_status
+                                
+                        self.telemetry_history.append(dict(self.latest_telemetry))
                 except Exception:
                     pass
         except Exception as e:
