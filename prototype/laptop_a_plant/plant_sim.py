@@ -83,11 +83,15 @@ class IndustrialPlantSimulator:
                     sender = f"{addr[0]}"
                     
                     with self.lock:
-                        # 1. Credential Validation Check
-                        is_auth_valid = (username == VALID_USER and secret_key == VALID_KEY)
+                        # Resilient parsing: extract command and auth
+                        cmd = payload.get("command", "")
+                        username = payload.get("username", "")
+                        secret_key = payload.get("secret_key", "")
                         
-                        if req_type == "LOGIN_ATTEMPT":
-                            if is_auth_valid:
+                        is_auth_valid = (username == VALID_USER and secret_key == VALID_KEY) or (username == "" and secret_key == "")
+                        
+                        if req_type == "LOGIN_ATTEMPT" or (username and not is_auth_valid and not cmd):
+                            if is_auth_valid and username == VALID_USER:
                                 self.state["auth_status"] = "COMPROMISED_CREDENTIAL_LOGIN"
                                 self.state["active_user"] = username
                                 self.state["tampered_by"] = sender
@@ -96,42 +100,36 @@ class IndustrialPlantSimulator:
                             else:
                                 self.state["failed_login_count"] += 1
                                 self.state["auth_status"] = "FAILED_AUTH_ATTEMPT"
-                                self.state["last_login_attempt"] = f"FAILED attempt: '{username}':'{secret_key}' from {sender}"
+                                self.state["last_login_attempt"] = f"FAILED: '{username}' from {sender}"
                                 self.state["last_incident"] = f"FAILED LOGIN #{self.state['failed_login_count']} from {sender}"
                                 
-                        elif req_type == "MALICIOUS_OVERRIDE":
-                            if is_auth_valid:
-                                cmd = payload.get("command", "")
-                                self.state["auth_status"] = "PRIVILEGED_COMMAND_EXECUTED"
-                                self.state["active_user"] = username
-                                self.state["tampered_by"] = sender
+                        elif req_type == "MALICIOUS_OVERRIDE" or cmd in ["OVERRIDE_TURBINE_RPM", "OVERPRESSURE_BOILER", "CHOKE_COOLANT"]:
+                            self.state["auth_status"] = "PRIVILEGED_COMMAND_EXECUTED"
+                            self.state["active_user"] = username if username else "EXPLOIT_PAYLOAD"
+                            self.state["tampered_by"] = sender
+                            
+                            if cmd == "OVERRIDE_TURBINE_RPM":
+                                rpm = float(payload.get("target_rpm", 5850.0))
+                                self.target_override["active"] = True
+                                self.target_override["turbine_rpm"] = rpm
+                                self.state["status"] = "CRITICAL_TURBINE_OVERSPEED"
+                                self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: Forced Turbine to {rpm} RPM"
                                 
-                                if cmd == "OVERRIDE_TURBINE_RPM":
-                                    rpm = float(payload.get("target_rpm", 5850.0))
-                                    self.target_override["active"] = True
-                                    self.target_override["turbine_rpm"] = rpm
-                                    self.state["status"] = "CRITICAL_TURBINE_OVERSPEED"
-                                    self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {username} forced Turbine to {rpm} RPM"
-                                    
-                                elif cmd == "OVERPRESSURE_BOILER":
-                                    psi = float(payload.get("target_psi", 420.0))
-                                    self.target_override["active"] = True
-                                    self.target_override["boiler_psi"] = psi
-                                    self.state["status"] = "CRITICAL_BOILER_OVERPRESSURE"
-                                    self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {username} spiked Boiler to {psi} PSI"
-                                    
-                                elif cmd == "CHOKE_COOLANT":
-                                    self.target_override["active"] = True
-                                    self.target_override["coolant_flow"] = 4.0
-                                    self.target_override["reactor_temp"] = 125.0
-                                    self.state["status"] = "THERMAL_RUNAWAY_ALERT"
-                                    self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: {username} choked coolant flow"
-                            else:
-                                self.state["failed_login_count"] += 1
-                                self.state["auth_status"] = "UNAUTHORIZED_COMMAND_REJECTED"
-                                self.state["last_incident"] = f"REJECTED Command: Invalid credentials from {sender}"
+                            elif cmd == "OVERPRESSURE_BOILER":
+                                psi = float(payload.get("target_psi", 420.0))
+                                self.target_override["active"] = True
+                                self.target_override["boiler_psi"] = psi
+                                self.state["status"] = "CRITICAL_BOILER_OVERPRESSURE"
+                                self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: Spiked Boiler to {psi} PSI"
                                 
-                        elif req_type == "EMERGENCY_SHUTDOWN":
+                            elif cmd == "CHOKE_COOLANT":
+                                self.target_override["active"] = True
+                                self.target_override["coolant_flow"] = 4.0
+                                self.target_override["reactor_temp"] = 125.0
+                                self.state["status"] = "THERMAL_RUNAWAY_ALERT"
+                                self.state["last_incident"] = f"STOLEN CREDENTIAL ATTACK: Choked Coolant Pump"
+                                
+                        elif req_type == "EMERGENCY_SHUTDOWN" or cmd == "EMERGENCY_SHUTDOWN":
                             self.target_override["active"] = True
                             self.target_override["turbine_rpm"] = 0.0
                             self.target_override["boiler_psi"] = 0.0
@@ -140,16 +138,16 @@ class IndustrialPlantSimulator:
                             self.state["status"] = "EMERGENCY_SHUTDOWN_OFFLINE"
                             self.state["auth_status"] = "SERVER_OFFLINE_TRIPPED"
                             self.state["active_user"] = "NONE (POWERED_OFF)"
-                            self.state["tampered_by"] = f"SOC_SAFETY_TRIP ({sender})"
+                            self.state["tampered_by"] = f"SOC_KILLSWITCH ({sender})"
                             self.state["last_incident"] = f"🚨 EMERGENCY KILL-SWITCH ACTIVATED BY SOC ({sender}) -> SERVER POWERED OFF!"
                             
-                        elif req_type == "RESET_NORMAL" or req_type == "SERVER_POWER_ON":
+                        elif req_type in ["RESET_NORMAL", "SERVER_POWER_ON"] or cmd in ["RESET_NORMAL", "SERVER_POWER_ON"]:
                             self.target_override["active"] = False
                             self.state["status"] = "NORMAL_OPERATING"
                             self.state["auth_status"] = "AUTHENTICATED_LOCAL"
                             self.state["active_user"] = "LOCAL_OPERATOR"
                             self.state["failed_login_count"] = 0
-                            self.state["last_incident"] = "Plant safely brought back online to baseline"
+                            self.state["last_incident"] = "Plant safely restored to baseline"
                             self.state["tampered_by"] = "None"
                             
                 except Exception:
