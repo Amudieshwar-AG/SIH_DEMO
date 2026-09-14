@@ -1,10 +1,10 @@
 @echo off
 cd /d "%~dp0"
-title [PROJECT S.H.I.E.L.D.] - SOC Threat Defense & ML Dashboard
+title [PROJECT SYSTEM HACKERS] - SOC Threat Defense & ML Dashboard
 color 0B
 echo ========================================================
-echo   STARTING PROJECT S.H.I.E.L.D. : SOC DEFENSE HUB
-echo   SCADA Heuristic Intrusion Evaluation & Live Defense
+echo   STARTING PROJECT SYSTEM HACKERS : SOC DEFENSE HUB
+echo   SCADA Cyber Defense & AI SOC Hub
 echo ========================================================
 echo Starting Streamlit server on port 8502...
 start http://localhost:8502
